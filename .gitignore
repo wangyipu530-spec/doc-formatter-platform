@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+
+# 上传文件（运行时生成）
+uploads/target/*
+uploads/output/*
+uploads/specification/*
+uploads/benchmark/*
+
+# 临时转换文件
+*.tmp
+*.docx.tmp
+*.md.tmp
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Office 临时文件
+~$*
+
+按规范生成的_培训总结.docx
+
+# 测试临时文件
+test_*.py
+test_*.docx
+gen_*.py
+debug_*.py
+verify_*.py
+payload_*.json
+
+# 系统
+Thumbs.db
+.DS_Store

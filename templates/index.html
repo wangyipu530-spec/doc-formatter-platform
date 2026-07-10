@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文档自动排版助手</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+    <div class="header-inner">
+        <div class="header-icon">📄</div>
+        <div>
+            <h1>文档自动排版助手</h1>
+            <div class="subtitle">doc-formatter · 智能排版平台</div>
+        </div>
+    </div>
+</div>
+
+<!-- Container -->
+<div class="container">
+
+    <!-- 左栏：上传 & 指令 -->
+    <div>
+        <!-- 待排版文档上传 -->
+        <div class="card">
+            <div class="card-header">📤 待排版文档</div>
+            <div class="card-body">
+                <div class="upload-zone" id="targetZone">
+                    <div class="icon">📄</div>
+                    <div class="text">点击或拖拽上传 Word 文档（.docx）</div>
+                    <div class="hint">需要排版的原始文档</div>
+                    <div class="file-info">
+                        📎 <span id="targetFileName"></span>
+                        <span id="targetFileSize" style="color:#9ca3af;font-size:12px"></span>
+                    </div>
+                    <input type="file" id="targetFile" accept=".docx">
+                </div>
+                <div class="upload-status" id="targetStatus"></div>
+            </div>
+        </div>
+
+        <!-- 模式选择 -->
+        <div class="card" style="margin-top: 24px;">
+            <div class="card-header">⚙️ 排版模式</div>
+            <div class="card-body">
+                <div class="tabs" id="modeTabs">
+                    <button class="tab-btn active" data-tab="instruction">📝 按指令修改</button>
+                    <button class="tab-btn" data-tab="specification">📋 按规范排版</button>
+                    <button class="tab-btn" data-tab="benchmark">🏷️ 按标杆文档</button>
+                </div>
+
+                <!-- 模式一：按指令修改 -->
+                <div class="tab-content active" id="tab-instruction">
+                    <textarea id="instructions" placeholder="请输入格式要求，例如：&#10;• 把标题改成黑体三号加粗&#10;• 把正文改成宋体小四号行距1.5倍&#10;• 页边距改成上3cm下3cm左2.5cm右2.5cm&#10;• 只把封面部分改成楷体四号"></textarea>
+                </div>
+
+                <!-- 模式二：按规范排版 -->
+                <div class="tab-content" id="tab-specification">
+                    <div class="upload-zone" id="specZone">
+                        <div class="icon">📋</div>
+                        <div class="text">点击或拖拽上传格式规范文件（.docx / .pdf）</div>
+                        <div class="hint">也可选择下方知识库中的已有规范</div>
+                        <div class="file-info">
+                            📎 <span id="specFileName"></span>
+                        </div>
+                        <input type="file" id="specFile" accept=".docx,.md,.txt,.pdf">
+                    </div>
+                    <div class="kb-selector" id="specKbSelector">
+                        <label>📚 或从知识库选择已有规范：</label>
+                        <select id="specKbSelect">
+                            <option value="">— 不使用知识库规范 —</option>
+                        </select>
+                        <div class="hint">知识库中的格式规范文件</div>
+                    </div>
+                </div>
+
+                <!-- 模式三：按标杆文档 -->
+                <div class="tab-content" id="tab-benchmark">
+                    <div class="upload-zone" id="benchmarkZone">
+                        <div class="icon">🏷️</div>
+                        <div class="text">点击或拖拽上传标杆文档（.docx / .pdf）</div>
+                        <div class="hint">作为格式参考的基准文档</div>
+                        <div class="file-info">
+                            📎 <span id="benchmarkFileName"></span>
+                        </div>
+                        <input type="file" id="benchmarkFile" accept=".docx,.md,.txt,.pdf">
+                    </div>
+                    <div class="kb-selector" id="bmKbSelector">
+                        <label>📚 或从知识库选择已有标杆文档：</label>
+                        <select id="bmKbSelect">
+                            <option value="">— 不使用知识库标杆 —</option>
+                        </select>
+                        <div class="hint">知识库中的标杆文档</div>
+                    </div>
+                </div>
+
+                <!-- 保存到知识库 -->
+                <div class="checkbox-group">
+                    <input type="checkbox" id="saveToKb">
+                    <label for="saveToKb">排版后自动保存到知识库</label>
+                </div>
+
+                <!-- 处理按钮 -->
+                <div class="process-area">
+                    <button class="btn btn-primary btn-block" id="processBtn" disabled>
+                        🚀 开始排版
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右栏：结果 & 知识库 -->
+    <div>
+        <!-- 结果区 -->
+        <div class="card" id="resultCard">
+            <div class="card-header">
+                <span>📊 排版结果</span>
+                <button class="btn btn-outline" style="margin-left:auto;padding:4px 10px;font-size:12px;" onclick="toggleKbModal()">
+                    📚 知识库
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="empty-state" id="resultEmpty">
+                    <div class="icon">📄</div>
+                    <div class="text">上传文档并选择排版模式后<br>点击「开始排版」查看结果</div>
+                </div>
+
+                <div class="result-area" id="resultArea">
+                    <!-- 下载区 -->
+                    <div class="download-area" id="downloadArea">
+                        <div class="label">✅ 排版完成</div>
+                        <a id="downloadLink" class="btn btn-success" download>
+                            ⬇️ 下载排版后文档
+                        </a>
+                    </div>
+
+                    <!-- 变更报告 -->
+                    <div style="margin-top: 12px;">
+                        <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:8px;">
+                            📋 排版变更报告
+                        </div>
+                        <div class="report-card" id="reportContent"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-box">
+        <div class="spinner-big"></div>
+        <div class="text">正在排版处理中...</div>
+        <div class="hint">请稍候，文档格式调整可能需要几秒钟</div>
+    </div>
+</div>
+
+<!-- Status bar -->
+<div class="status-bar" id="statusBar"></div>
+
+<!-- 知识库 Modal -->
+<div class="modal-overlay" id="kbModal">
+    <div class="modal">
+        <h3>📚 知识库</h3>
+        <div id="kbContent"></div>
+        <button class="btn btn-outline" style="margin-top:12px;" onclick="toggleKbModal()">关闭</button>
+    </div>
+</div>
+
+<script src="/static/script.js"></script>
+</body>
+</html>
