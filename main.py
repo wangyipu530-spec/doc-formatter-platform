@@ -12,12 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
-from engine import (
-    apply_instructions,
-    apply_specification,
-    apply_benchmark,
-    save_to_knowledge_base,
-)
+from engine import process_document, save_to_knowledge_base
 from docx import Document
 from docx.shared import Pt
 
@@ -123,7 +118,7 @@ async def upload_file(file_type: str, file: UploadFile = File(...)):
 
 
 @app.post('/api/process')
-async def process_document(data: dict):
+async def handle_process(data: dict):
     """
     处理文档排版
     body: {
@@ -156,150 +151,107 @@ async def process_document(data: dict):
     output_path = UPLOAD_DIR / 'output' / output_name
 
     try:
-        if mode == 'instruction':
-            result = apply_instructions(str(target_path), instructions, str(output_path))
-        elif mode == 'specification':
-            spec_path = None
-            source_name = ''
-            if spec_file:
-                # 先在上传目录找，再在知识库目录找
-                spec_path_candidate = UPLOAD_DIR / 'specification' / spec_file
-                if spec_path_candidate.exists():
-                    spec_path = spec_path_candidate
-                    source_name = f'用户上传 ({spec_file})'
-                else:
-                    # 知识库中查找
-                    kb_spec_dir = BASE_DIR / 'knowledge_base' / '01-格式规范'
-                    kb_candidate = kb_spec_dir / spec_file
-                    if kb_candidate.exists():
-                        if kb_candidate.suffix == '.pdf':
-                            tmp_md = _pdf_text_to_file(kb_candidate)
-                            if tmp_md:
-                                spec_path = tmp_md
-                                source_name = f'知识库 ({spec_file}, PDF→文本)'
-                        elif kb_candidate.suffix == '.md':
-                            spec_path = kb_candidate
-                            source_name = f'知识库 ({spec_file})'
-                        else:
-                            spec_path = kb_candidate
-                            source_name = f'知识库 ({spec_file})'
-                if save_to_kb and spec_path and spec_path.suffix != '.tmp':
-                    kb_path = save_to_knowledge_base(str(spec_path), 'specification')
-                    if kb_path:
-                        result_extra_kb = f'已保存至知识库 01-格式规范/{os.path.basename(kb_path)}'
+        # 确定规范/标杆文件路径（供读取文本内容）
+        spec_path = None
+        source_name = ''
 
+        if mode in ('specification', 'benchmark'):
+            file_key = 'spec_file' if mode == 'specification' else 'benchmark_file'
+            uploaded_file = data.get(file_key)
+
+            if uploaded_file:
+                # 上传目录
+                sub_dir = 'specification' if mode == 'specification' else 'benchmark'
+                candidate = UPLOAD_DIR / sub_dir / uploaded_file
+                if candidate.exists():
+                    spec_path = candidate
+                    source_name = f'用户上传 ({uploaded_file})'
+                else:
+                    # 知识库
+                    kb_sub = '01-格式规范' if mode == 'specification' else '02-标杆文档'
+                    kb_candidate = BASE_DIR / 'knowledge_base' / kb_sub / uploaded_file
+                    if kb_candidate.exists():
+                        spec_path = kb_candidate
+                        source_name = f'知识库 ({uploaded_file})'
+                    else:
+                        # 也查原始知识库（从配置读取）
+                        try:
+                            import yaml
+                            with open(BASE_DIR / 'config.yaml', 'r', encoding='utf-8') as _cf:
+                                _cfg = yaml.safe_load(_cf)
+                            _kb_root = Path(_cfg.get('knowledge_base', {}).get('path', 'knowledge_base'))
+                            if not _kb_root.is_absolute():
+                                _kb_root = BASE_DIR / _kb_root
+                            alt = _kb_root / kb_sub / uploaded_file
+                            if alt.exists():
+                                spec_path = alt
+                                source_name = f'知识库 ({uploaded_file})'
+                        except Exception:
+                            pass
+
+            # 未上传时用默认
             if spec_path is None:
-                kb_spec = _find_default_spec()
+                if mode == 'specification':
+                    kb_spec = _find_default_spec()
+                else:
+                    kb_spec = _find_default_benchmark()
                 if kb_spec:
-                    if kb_spec.suffix == '.pdf':
-                        tmp_md = _pdf_text_to_file(kb_spec)
-                        if tmp_md:
-                            spec_path = tmp_md
-                            source_name = f'{kb_spec.name} (PDF→文本)'
-                        else:
-                            raise HTTPException(500, '无法读取 PDF 内容（需安装 pymupdf）')
-                    else:
-                        spec_path = kb_spec
-                        source_name = kb_spec.name
+                    spec_path = kb_spec
+                    source_name = kb_spec.name
                 else:
-                    raise HTTPException(400, '请上传格式规范文件（未找到知识库默认规范）')
+                    raise HTTPException(400, f'未找到默认{"规范" if mode=="specification" else "标杆"}文件')
 
-            result = apply_specification(str(target_path), str(spec_path), str(output_path))
-            result['report']['source'] = f'知识库规范 ({source_name})'
-            # 清理临时转换文件 (PDF→文本)
-            if spec_path and str(spec_path).endswith('.tmp'):
-                try:
-                    spec_path.unlink()
-                except:
-                    pass
+        # 调用统一引擎
+        result = process_document(
+            doc_path=str(target_path),
+            output_path=str(output_path),
+            mode=mode,
+            spec_path=str(spec_path) if spec_path else None,
+            user_instructions=instructions,
+            original_filename=original_filename,
+        )
 
-        elif mode == 'benchmark':
-            bm_path = None
-            source_name = ''
-            if benchmark_file:
-                bm_path_candidate = UPLOAD_DIR / 'benchmark' / benchmark_file
-                if bm_path_candidate.exists():
-                    bm_path = bm_path_candidate
-                    source_name = f'用户上传 ({benchmark_file})'
-                else:
-                    kb_bm_dir = BASE_DIR / 'knowledge_base' / '02-标杆文档'
-                    kb_candidate = kb_bm_dir / benchmark_file
-                    if kb_candidate.exists():
-                        if kb_candidate.suffix == '.md':
-                            tmp_docx = _md_to_docx(kb_candidate)
-                            bm_path = tmp_docx
-                            source_name = f'知识库 ({benchmark_file}, Markdown→Word)'
-                        elif kb_candidate.suffix == '.pdf':
-                            tmp_md = _pdf_text_to_file(kb_candidate)
-                            if tmp_md:
-                                tmp_docx = _md_to_docx(tmp_md)
-                                bm_path = tmp_docx
-                                source_name = f'知识库 ({benchmark_file}, PDF→Word)'
-                                _clean_tmp(tmp_md)
-                        else:
-                            bm_path = kb_candidate
-                            source_name = f'知识库 ({benchmark_file})'
-                if save_to_kb and bm_path and bm_path.suffix != '.tmp':
-                    kb_path = save_to_knowledge_base(str(bm_path), 'benchmark')
-                    if kb_path:
-                        result_extra_kb = f'已保存至知识库 02-标杆文档/{os.path.basename(kb_path)}'
+        # 处理失败
+        if not result.get('success'):
+            raise HTTPException(500, result.get('error', '排版处理失败'))
 
-            if bm_path is None:
-                kb_bm = _find_default_benchmark()
-                if kb_bm:
-                    if kb_bm.suffix == '.md':
-                        tmp_docx = _md_to_docx(kb_bm)
-                        bm_path = tmp_docx
-                        source_name = f'{kb_bm.name} (Markdown→Word)'
-                    elif kb_bm.suffix == '.pdf':
-                        tmp_md = _pdf_text_to_file(kb_bm)
-                        if tmp_md:
-                            tmp_docx = _md_to_docx(tmp_md)
-                            bm_path = tmp_docx
-                            source_name = f'{kb_bm.name} (PDF→文本→Word)'
-                            # 清理中间临时文件
-                            _clean_tmp(tmp_md)
-                        else:
-                            raise HTTPException(500, '无法读取 PDF 内容（需安装 pymupdf）')
-                    else:
-                        bm_path = kb_bm
-                        source_name = kb_bm.name
-                else:
-                    raise HTTPException(400, '请上传标杆文档（未找到知识库默认标杆）')
-
-            result = apply_benchmark(str(target_path), str(bm_path), str(output_path))
-            result['report']['source'] = f'知识库标杆 ({source_name})'
-            # 清理临时转换文件
-            if str(bm_path).endswith('.tmp'):
-                try:
-                    bm_path.unlink()
-                except:
-                    pass
-        else:
-            raise HTTPException(400, '无效的模式，请选择 instruction / specification / benchmark')
-
+        # 补全来源信息
+        result['report']['source'] = source_name or f'LLM-{mode}'
         result['output_file'] = output_name
-        # 修正报告中的文件名为原始文件名（非 UUID）
-        result['report']['filename'] = original_filename
 
-        # 自动保存副本到桌面「排版后」目录
+        # 保存到知识库
+        if save_to_kb and spec_path:
+            kb_type = 'specification' if mode == 'specification' else 'benchmark'
+            kb_target = save_to_knowledge_base(str(spec_path), kb_type)
+            if kb_target:
+                kb_sub = '01-格式规范' if mode == 'specification' else '02-标杆文档'
+                result['report']['knowledge_base_update'] = f'已保存至知识库 {kb_sub}/{os.path.basename(kb_target)}'
+
+        # 自动保存（从配置读取路径）
         try:
-            auto_save_dir = Path('C:/Users/王逸朴/Desktop/智能体大赛/排版后')
-            auto_save_dir.mkdir(parents=True, exist_ok=True)
+            import yaml
+            with open(BASE_DIR / 'config.yaml', 'r', encoding='utf-8') as _cf:
+                _cfg = yaml.safe_load(_cf)
+            _save_root = Path(_cfg.get('auto_save', {}).get('path', 'uploads/output'))
+            if not _save_root.is_absolute():
+                _save_root = BASE_DIR / _save_root
+            _save_root.mkdir(parents=True, exist_ok=True)
             src = UPLOAD_DIR / 'output' / output_name
             if src.exists():
                 import shutil
-                dst = auto_save_dir / output_name
+                dst = _save_root / output_name
                 shutil.copy2(str(src), str(dst))
                 result['auto_saved_to'] = str(dst)
-        except Exception as e:
-            # 保存失败不影响主流程
+        except Exception:
             pass
 
         return result
 
     except Exception as e:
-        raise HTTPException(500, f'排版处理出错: {str(e)}')
+        import traceback
+        tb = traceback.format_exc()
+        print(f"!!! 排版错误: {tb}")
+        raise HTTPException(500, f'排版处理出错: {str(e)}\n{tb[:500]}')
 
 
 @app.get('/api/download/{filename}')
@@ -358,7 +310,7 @@ async def download_kb_file(category: str, filename: str):
     file_path = BASE_DIR / 'knowledge_base' / dir_name / filename
     if not file_path.exists():
         # 也检查原始知识库目录
-        alt_path = Path('C:/Users/王逸朴/Desktop/智能体大赛/知识库') / dir_name / filename
+        alt_path = Path('C:/Users/王逸朴/Desktop/AI agent competition/知识库') / dir_name / filename
         if alt_path.exists():
             file_path = alt_path
     if not file_path.exists():
@@ -409,4 +361,5 @@ def _find_default_benchmark():
 
 if __name__ == '__main__':
     import uvicorn
-    uvicorn.run(app, host='127.0.0.1', port=8000)
+    port = int(os.environ.get('PORT', 8000))
+    uvicorn.run(app, host='0.0.0.0', port=port)

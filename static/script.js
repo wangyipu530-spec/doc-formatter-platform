@@ -259,6 +259,13 @@ function showResult(data) {
         });
     }
 
+    if (report.suggestions && report.suggestions.length > 0) {
+        html += `\n<div class="section-title">💡 AI 建议</div>`;
+        report.suggestions.forEach(s => {
+            html += `  <span class="info">•</span> ${s}\n`;
+        });
+    }
+
     if (report.knowledge_base_update) {
         html += `\n<div class="section-title">📌 知识库更新</div>`;
         html += `  <span class="info">•</span> ${report.knowledge_base_update}\n`;

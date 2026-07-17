@@ -1,0 +1,20 @@
+# 文档自动排版助手 - 配置
+# 注意：此文件会提交到 Git，请勿在此填写真实 API Key
+# API Key 通过 RAILWAY 环境变量 DEEPSEEK_API_KEY 传入
+
+llm:
+  provider: deepseek
+  base_url: "https://api.deepseek.com"
+  model: "deepseek-chat"
+  api_key: ""  # 留空，由环境变量 DEEPSEEK_API_KEY 覆盖
+  temperature: 0.1
+  max_tokens: 4096
+
+# 知识库路径
+knowledge_base:
+  path: "knowledge_base"
+
+# 自动保存路径
+auto_save:
+  enabled: true
+  path: "uploads/output"
