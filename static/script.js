@@ -49,14 +49,14 @@ function setupUploadZone(zoneId, inputId, statusId, fileNameId, fileSizeId, onUp
                        : zoneId.includes('benchmark') ? 'benchmark'
                        : 'target';
 
-        const allowedExts = fileType === 'target' ? ['.docx'] : ['.docx', '.md', '.txt'];
+        const allowedExts = fileType === 'target' ? ['.docx'] : ['.docx', '.md', '.txt', '.pdf'];
         const ext = '.' + file.name.split('.').pop().toLowerCase();
         if (!allowedExts.includes(ext)) {
             showStatus(`仅支持 ${allowedExts.join(', ')} 格式`, 'error');
             return;
         }
 
-        statusEl.textContent = '⏳ 上传中...';
+        if (statusEl) statusEl.textContent = '⏳ 上传中...';
 
         try {
             const formData = new FormData();
@@ -80,12 +80,12 @@ function setupUploadZone(zoneId, inputId, statusId, fileNameId, fileSizeId, onUp
                 const el = document.getElementById(fileSizeId);
                 if (el) el.textContent = `(${(file.size / 1024).toFixed(1)} KB)`;
             }
-            statusEl.textContent = '✅ 上传成功';
+            if (statusEl) statusEl.textContent = '✅ 上传成功';
 
             if (onUpload) onUpload({ name: file.name, stored_name: data.stored_name });
 
         } catch (err) {
-            statusEl.textContent = `❌ ${err.message}`;
+            if (statusEl) statusEl.textContent = `❌ ${err.message}`;
             showStatus(err.message, 'error');
         }
     });
