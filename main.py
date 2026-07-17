@@ -300,6 +300,28 @@ async def list_knowledge_base():
     return result
 
 
+@app.get('/api/debug')
+async def debug():
+    """调试端点：检查环境变量配置"""
+    import os
+    result = {
+        'DEEPSEEK_API_KEY': bool(os.environ.get('DEEPSEEK_API_KEY')),
+        'DEEPSEEK_KEY': bool(os.environ.get('DEEPSEEK_KEY')),
+        'DEEPSEEK_APIKEY': bool(os.environ.get('DEEPSEEK_APIKEY')),
+        'has_config_file': os.path.exists(os.path.join(os.path.dirname(__file__), 'config.yaml')),
+    }
+    # 读取当前实际加载的 Key（只显示前5位）
+    try:
+        import yaml
+        with open(os.path.join(os.path.dirname(__file__), 'config.yaml')) as f:
+            cfg = yaml.safe_load(f)
+        key = cfg.get('llm', {}).get('api_key', '')
+        result['config_file_key_preview'] = key[:5] + '...' if key else '(empty)'
+    except Exception as e:
+        result['config_read_error'] = str(e)
+    return result
+
+
 @app.get('/api/knowledge-base/download/{category}/{filename}')
 async def download_kb_file(category: str, filename: str):
     """下载知识库中的文件"""

@@ -24,7 +24,7 @@ def _load_config():
     with open(cfg_path, 'r', encoding='utf-8') as f:
         _config = yaml.safe_load(f)
     # 环境变量覆盖 API Key（部署用）
-    env_key = os.environ.get('DEEPSEEK_API_KEY')
+    env_key = os.environ.get('DEEPSEEK_API_KEY') or os.environ.get('DEEPSEEK_KEY') or os.environ.get('DEEPSEEK_APIKEY')
     if env_key:
         _config.setdefault('llm', {})['api_key'] = env_key
     return _config
